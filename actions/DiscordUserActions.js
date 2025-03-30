@@ -1,84 +1,90 @@
 const DiscordUser = require("../model/DiscordUser");
-
+const getTimeForLog = require("../common/time");
 
 /**
- * isRegisteredUser fonksiyonu ile kullanıcının kayıtlı olup olmadığını kontrol ediyoruz, return olarak varsa discordUser yoksa false döndürüyor.
+ * isRegisteredUser fonksiyonu ile kullanıcının kayıtlı olup olmadığını kontrol ediyoruz
  * @param {String} discordUserID
- * @returns {Promise}
+ * @returns {Promise<Object|false>} Kullanıcı nesnesini veya false
  */
 async function isRegisteredUser(discordUserID) {
-  return new Promise((resolve, reject) => {
-    DiscordUser.findOne({ id: discordUserID }, (err, discordUser) => {
-      if (err) {
-        reject(err);
-      }
-      if (discordUser) {
-        resolve(discordUser);
-      } else {
-        resolve(false);
-      }
-    });
-  });
+  try {
+    const discordUser = await DiscordUser.findOne({ id: discordUserID }).exec();
+    return discordUser || false;
+  } catch (error) {
+    console.error(getTimeForLog() + `Error checking user ${discordUserID}:`, error);
+    return false;
+  }
 }
 
 /**
- * registerUser fonksiyonu ile kullanıcıyı kayıt ediyoruz, return olarak discordUser döndürüyor.
- * @param {user} user 
- * @returns {Promise}
+ * registerUser fonksiyonu ile kullanıcıyı kayıt ediyoruz
+ * @param {Object} user Discord kullanıcı nesnesi
+ * @returns {Promise<Object>} Oluşturulan DiscordUser nesnesi
  */
 async function registerUser(user) {
-  return new Promise((resolve, reject) => {
+  try {
     const discordUser = new DiscordUser(user);
-    console.log("DİSCORDUSER: " + discordUser);
-    discordUser.save((err) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(discordUser);
-    });
-  });
+    console.log(getTimeForLog() + "Registering Discord user:", user.username);
+    await discordUser.save();
+    return discordUser;
+  } catch (error) {
+    console.error(getTimeForLog() + "Error registering user:", error);
+    throw error;
+  }
 }
 
 /**
- * getDiscordUserFromMongo fonksiyonu ile kullanıcının kayıtlı olduğu discordUser nesnesini döndürüyoruz.
- * @param {discordUserID} discordUserID 
- * @returns {Promise}
+ * getDiscordUserFromMongo fonksiyonu ile kullanıcının kayıtlı olduğu discordUser nesnesini döndürüyoruz
+ * @param {String} discordUserID Discord kullanıcı ID'si
+ * @returns {Promise<Object>} Bulunan kullanıcı nesnesi
  */
 async function getDiscordUserFromMongo(discordUserID) {
-  return new Promise((resolve, reject) => {
-    DiscordUser.findOne({ id: discordUserID })
+  try {
+    return await DiscordUser.findOne({ id: discordUserID })
       .populate("trackers")
-      .exec((err, discordUser) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(discordUser);
-      });
-  });
+      .exec();
+  } catch (error) {
+    console.error(getTimeForLog() + `Error getting Discord user ${discordUserID}:`, error);
+    throw error;
+  }
 }
 
+/**
+ * Kullanıcıya tracker ekler
+ * @param {Object} discordUser DiscordUser nesnesi
+ * @param {String} trackersID Tracker ID'si
+ * @returns {Promise<Object>} Güncellenmiş kullanıcı nesnesi
+ */
 async function addTrackersToDiscordUser(discordUser, trackersID) {
-  return new Promise((resolve, reject) => {
-    discordUser.trackers.push(trackersID);
-    discordUser.save((err) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(discordUser);
-    });
-  });
+  try {
+    // Tekrarlanan tracker'ları önlemek için kontrol
+    if (!discordUser.trackers.includes(trackersID)) {
+      discordUser.trackers.push(trackersID);
+    }
+    
+    await discordUser.save();
+    return discordUser;
+  } catch (error) {
+    console.error(getTimeForLog() + "Error adding tracker to Discord user:", error);
+    throw error;
+  }
 }
 
+/**
+ * Kullanıcıdan tracker kaldırır
+ * @param {Object} discordUser DiscordUser nesnesi
+ * @param {String} trackersID Tracker ID'si
+ * @returns {Promise<Object>} Güncellenmiş kullanıcı nesnesi
+ */
 async function deleteTrackersFromDiscordUser(discordUser, trackersID) {
-  return new Promise((resolve, reject) => {
+  try {
     discordUser.trackers.pull(trackersID);
-    discordUser.save((err) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(discordUser);
-    });
-  });
+    await discordUser.save();
+    return discordUser;
+  } catch (error) {
+    console.error(getTimeForLog() + "Error removing tracker from Discord user:", error);
+    throw error;
+  }
 }
 
 module.exports = {

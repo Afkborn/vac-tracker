@@ -1,6 +1,8 @@
 require("dotenv").config();
-axios = require("axios");
+const axios = require("axios");
 const SteamUser = require("../model/SteamUser");
+const getTimeForLog = require("../common/time");
+const Config = require("../constants/Config");
 
 function steamidToSteam64(steamid) {
   var steam64id = 76561197960265728n;
@@ -18,101 +20,110 @@ function isNumeric(s) {
 }
 
 async function getSteamIDFromVanity(vanity) {
-  return new Promise(async (resolve, reject) => {
+  try {
     const configuration = {
       method: "get",
-      url: `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${process.env.STEAM_API_KEY}&vanityurl=${vanity}`,
+      url: `${Config.API.STEAM_VANITY_URL}?key=${process.env.STEAM_API_KEY}&vanityurl=${vanity}`,
     };
     const response = await axios(configuration);
     if (response.data.response.success == 1) {
-      resolve(response.data.response.steamid);
+      return response.data.response.steamid;
     } else {
-      resolve(null);
+      return null;
     }
-  });
+  } catch (error) {
+    console.error(
+      getTimeForLog() + `Error getting Steam ID from vanity "${vanity}":`,
+      error
+    );
+    return null;
+  }
 }
 
 async function getSteamID(steamString) {
-  if (steamString.includes("https")) {
-    if (steamString[-1] != "/") {
-      steamString += "/";
+  try {
+    if (steamString.includes("https")) {
+      if (steamString[-1] != "/") {
+        steamString += "/";
+      }
+      if (steamString.includes("profiles")) {
+        let steamID = steamString.split("/")[4];
+        return steamID;
+      }
+      if (steamString.includes("id")) {
+        steamString = steamString.split("/")[4];
+        const steamID = await getSteamIDFromVanity(steamString);
+        return steamID;
+      }
     }
-    if (steamString.includes("profiles")) {
-      let steamID = steamString.split("/")[4];
-      return steamID;
+
+    if (isNumeric(steamString)) {
+      return steamString;
     }
-    if (steamString.includes("id")) {
-      steamString = steamString.split("/")[4];
-      const steamID = await getSteamIDFromVanity(steamString);
-      return steamID;
+
+    if (steamString.startsWith("STEAM_")) {
+      return steamidToSteam64(steamString);
     }
-  }
 
-  if (isNumeric(steamString)) {
-    return steamString;
+    const steamID = await getSteamIDFromVanity(steamString);
+    return steamID;
+  } catch (error) {
+    console.error(
+      getTimeForLog() + `Error parsing Steam ID from "${steamString}":`,
+      error
+    );
+    return null;
   }
-
-  if (steamString.startsWith("STEAM_")) {
-    return steamidToSteam64(steamString);
-  }
-
-  const steamID = await getSteamIDFromVanity(steamString);
-  return steamID;
 }
 
 async function getSteamUser(userstring) {
-  return new Promise(async (resolve, reject) => {
+  try {
     const steamID = await getSteamID(userstring);
     if (steamID == null) {
-      resolve(null);
+      console.log(getTimeForLog() + `No Steam ID found for "${userstring}"`);
+      return null;
     }
 
     const configuration = {
       method: "get",
-      url: `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${process.env.STEAM_API_KEY}&steamids=${steamID}`,
+      url: `${Config.API.STEAM_PLAYER_SUMMARY}?key=${process.env.STEAM_API_KEY}&steamids=${steamID}`,
     };
+
     const response = await axios(configuration);
     const steamUser = response.data.response.players[0];
+
     if (steamUser == null) {
-      resolve(null);
+      console.log(getTimeForLog() + `No Steam user found for ID ${steamID}`);
+      return null;
     }
 
-    const steamUserFromMongo = await getSteamUserFromMongo(steamID);
-    if (steamUserFromMongo == null) {
-      const newSteamUser = new SteamUser(steamUser);
-      newSteamUser.save((err) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(newSteamUser);
-      });
-    } else {
-      resolve(steamUserFromMongo);
-    }
-  });
+    // Modelde eklediğimiz findOrCreate metodunu kullanıyoruz
+    return await SteamUser.findOrCreate(steamUser);
+  } catch (error) {
+    console.error(getTimeForLog() + `Error getting Steam user:`, error);
+    return null;
+  }
 }
 
 async function getSteamUserFromMongo(steamID) {
-  return new Promise((resolve, reject) => {
-    SteamUser.findOne({ steamid: steamID }).exec((err, steamUser) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(steamUser);
-    });
-  });
+  try {
+    return await SteamUser.findOne({ steamid: steamID }).exec();
+  } catch (error) {
+    console.error(
+      getTimeForLog() + `Error getting Steam user ${steamID} from MongoDB:`,
+      error
+    );
+    return null;
+  }
 }
 
-
 async function getCountOfSteamUsers() {
-  return new Promise((resolve, reject) => {
-    SteamUser.countDocuments({}, (err, count) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(count);
-    });
-  });
+  try {
+    return await SteamUser.countDocuments({});
+  } catch (error) {
+    console.error(getTimeForLog() + "Error counting Steam users:", error);
+    return 0;
+  }
 }
 
 module.exports = {
@@ -120,6 +131,3 @@ module.exports = {
   getSteamUserFromMongo,
   getCountOfSteamUsers,
 };
-
-
-

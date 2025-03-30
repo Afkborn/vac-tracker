@@ -1,74 +1,44 @@
 const mongoose = require("mongoose");
 
-const TrackerSchema = new mongoose.Schema({
-  // artık gerek görmedim sebebi ise şu:
-  // discordUser aslında ekleyen kişiyi gösteriyordu fakat bir tracker'ı ben birden fazla discordUser'a ekleyebilirim. öyle olunca çok anlamsız oluyor
-  // ondan dolayı bu attribute'u sildim
-  // discordUser: {
-  //   type: mongoose.Schema.Types.ObjectId,
-  //   ref: "DiscordUser",
-  // },
+const trackerSchema = mongoose.Schema({
   steamUser: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "SteamUser",
-    unique: true,
+    required: true,
   },
   steamid: {
     type: String,
     required: true,
+    unique: true, // steamid alanını unique yapıyoruz
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  lastCheck: {
-    type: Date,
-    default: Date.now,
-  },
-  VACBanned: {
-    type: Boolean,
-    default: false,
-  },
-  NumberOfVACBans: {
-    type: Number,
-    default: 0,
-  },
-  DaysSinceLastBan: {
-    type: Number,
-    default: 0,
-  },
-  NumberOfGameBans: {
-    type: Number,
-    default: 0,
-  },
-  EconomyBan: {
-    type: String,
-    default: "none",
-  },
+  CommunityBanned: Boolean,
+  VACBanned: Boolean,
+  NumberOfVACBans: Number,
+  DaysSinceLastBan: Number,
+  NumberOfGameBans: Number,
+  EconomyBan: String,
   isBanned: {
     type: Boolean,
     default: false,
   },
-  bannedAt: {
-    type: Date,
-    default: null,
-  },
+  bannedAt: Date,
   users: [
     {
       discordUser: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "DiscordUser",
       },
-      channelId: {
-        type: String,
-        required: true,
-      },
-      guildId : {
-        type: String,
-        required: true,
-      }
+      channelId: String,
+      guildId: String,
     },
   ],
+  lastCheck: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model("Tracker", TrackerSchema);
+// steamUser indeksini kaldırıp steamid indeksini ekleme
+trackerSchema.index({ steamid: 1 }, { unique: true });
+
+module.exports = mongoose.model("Tracker", trackerSchema);

@@ -1,7 +1,9 @@
 const { isRegisteredUser } = require("../actions/DiscordUserActions");
 const Messages = require("../constants/Messages");
 const CommandDescription = require("../constants/CommandDescription");
-// const { getSteamUser } = require("../actions/SteamUserActions");
+const Config = require("../constants/Config");
+const Emojis = require("../constants/Emojis");
+const getTimeForLog = require("../common/time");
 const { getTrackersWithSteam } = require("../actions/TrackerActions");
 const {
   SlashCommandBuilder,
@@ -22,20 +24,27 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction) {
-    const isRegistered = await isRegisteredUser(interaction.user.id);
-    if (isRegistered) {
+    try {
+      const isRegistered = await isRegisteredUser(interaction.user.id);
+      if (!isRegistered) {
+        return await interaction.reply(Messages.USER_NOT_REGISTERED);
+      }
+      
       const username = interaction.options.getString("username");
       const trackedUsers = await getTrackersWithSteam(isRegistered);
       const trackedUser = trackedUsers.find(
         (user) => user.steamUser.personaname == username
       );
+      
       if (trackedUser) {
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId("unTrackButton_" + trackedUser._id)
-            .setLabel("Takipden Çık!")
+            .setLabel("Takipden Çık")
             .setStyle(ButtonStyle.Danger)
+            .setEmoji(Emojis.ACTION.ERROR)
         );
+        
         await interaction.reply({
           content: sprintf("Takipten çıkmak istediğine emin misin?"),
           components: [row],
@@ -43,8 +52,9 @@ module.exports = {
       } else {
         await interaction.reply(sprintf(Messages.USER_NOT_TRACKED, username));
       }
-    } else {
-      await interaction.reply(Messages.USER_NOT_REGISTERED);
+    } catch (error) {
+      console.error(getTimeForLog() + "Error in untrack command:", error);
+      await interaction.reply(Messages.COMMAND_ERROR);
     }
   },
 };
